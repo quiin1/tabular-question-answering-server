@@ -38,7 +38,7 @@ data = [["Party", "Votes", "%", "Seats", "+/\u2013"],
      ["Source: Nohlen et al.", "Source: Nohlen et al.", "Source: Nohlen et al.", "Source: Nohlen et al.", "Source: Nohlen et al."]]
 
 @app.post("/predict")
-def predict(data: dict):
+async def predict(data: dict):
     table = pd.DataFrame.from_records(data["table"][1:], columns=data["table"][0])
     
     query = data["query"]
