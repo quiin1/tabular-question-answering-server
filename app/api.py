@@ -1,10 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from transformers import (
-    BartForConditionalGeneration,
-    TapexTokenizer,
-)
-import pandas as pd
+import sqlite3
+from .utils import json_to_sql, create_sql_agent, delete_all_tables
+
+from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain.sql_database import SQLDatabase
+from langchain.llms.openai import OpenAI
+from langchain.agents.agent import AgentExecutor
+from langchain.agents.agent_toolkits.sql.prompt import SQL_PREFIX, SQL_SUFFIX
+from langchain.agents.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
+from langchain.agents.mrkl.base import ZeroShotAgent
+from langchain.agents.mrkl.prompt import FORMAT_INSTRUCTIONS
+from langchain.chains.llm import LLMChain
 
 app = FastAPI()
 
@@ -22,9 +29,8 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-tokenizer = TapexTokenizer.from_pretrained('model')
-model = BartForConditionalGeneration.from_pretrained('model')
-
+con = sqlite3.connect('Table.db')
+llm = OpenAI(temperature=0, model_name='gpt-3.5-turbo')
 
 @app.get("/", tags=["root"])
 async def read_root() -> dict:
@@ -32,12 +38,26 @@ async def read_root() -> dict:
 
 @app.post("/predict")
 async def predict(data: dict):
-    table = pd.DataFrame.from_records(data["table"][1:], columns=data["table"][0])
-    
-    query = data["query"].lower()
+    if 'table' in data:
+        json_to_sql(con, data)
+    else:
+        delete_all_tables(con)
+        cur = con.cursor()
+        cur.executescript(data['sql'])
 
-    encoding = tokenizer(table=table, query=query, return_tensors="pt")
-    
-    output = model.generate(**encoding)
+    db = SQLDatabase.from_uri("sqlite:///./Table.db")
+    toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 
-    return (tokenizer.batch_decode(output, skip_special_tokens=True))
+    agent_executor = create_sql_agent(
+        llm=OpenAI(temperature=0),
+        toolkit=toolkit,
+        verbose=True
+    )
+
+    result = agent_executor(data['query'])
+    
+    return {
+        'sql': result['intermediate_steps'][-1][0].tool_input,
+        'output': result['intermediate_steps'][-1][1],
+        'answer': result['output']
+    }
