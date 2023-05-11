@@ -12,7 +12,8 @@ from langchain.callbacks.base import BaseCallbackManager
 from langchain.chains.llm import LLMChain
 from langchain.llms.base import BaseLLM
 
-os.environ['OPENAI_API_KEY'] = "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"
+# Provide key to run the app
+os.environ['OPENAI_API_KEY'] = ""
 
 TABLE_PARAMETER = "{TABLE_PARAMETER}"
 DROP_TABLE_SQL = f"DROP TABLE {TABLE_PARAMETER};"
